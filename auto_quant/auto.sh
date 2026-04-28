@@ -527,7 +527,7 @@ EVAL_SESSION_SRC="${OPENCLAW_SESSIONS_DIR}/${EVAL_SESSION}.jsonl"
 QUANT_SESSION_DST="${RUN_OUTPUT_DIR}/session_quant_$$.jsonl"
 EVAL_SESSION_DST="${RUN_OUTPUT_DIR}/session_eval_$$.jsonl"
 FORMATTER="${SCRIPT_DIR}/format_sessions.py"
-GITHUB_UPLOADER="${SCRIPT_DIR}/upload_results_github.py"
+AZURE_UPLOADER="${SCRIPT_DIR}/upload_results_azure.py"
 
 log_step "Resolved configuration"
 echo "JSON file           : $JSON_FILENAME"
@@ -667,8 +667,8 @@ fi
 
 if [[ "$SKIP_UPLOAD" != "true" && "$SKIP_GITHUB" != "true" ]]; then
     run_step \
-        "Upload result artifacts to GitHub" \
-        python3 "$GITHUB_UPLOADER" \
+        "Upload result artifacts to Azure Blob Storage" \
+        python3 "$AZURE_UPLOADER" \
             "$RUN_OUTPUT_DIR" \
             "$MODEL_ID" \
             --pipeline "$PIPELINE" \
