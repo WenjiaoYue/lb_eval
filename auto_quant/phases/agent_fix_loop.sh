@@ -273,9 +273,40 @@ agent_fix_loop() {
         local prompt_file="${fix_log_dir}/prompt_${attempt}.txt"
         printf '%s\n' "${fix_prompt}" > "${prompt_file}"
 
-        # 6. Call OpenClaw agent (same session across attempts → retains memory)
+        # 6. Call the configured agent (same session across attempts → retains memory)
         local agent_log="${fix_log_dir}/attempt_${attempt}.log"
-        run_openclaw_fix "${fix_prompt}" "${agent_log}" "${fix_session_id}" || true
+        # Mark a baseline so we can capture exactly what the agent changes (patch).
+        local _patch_marker="${fix_log_dir}/.patch_marker_${attempt}"
+        : > "${_patch_marker}"
+
+        # Hybrid escalation: use the cheap PRIMARY backend (open-claw) for the first
+        # AGENT_ESCALATE_AFTER attempts; if those fail, escalate to the stronger
+        # ESCALATED backend (copilot) for the harder, non-routine case. Gated by
+        # AGENT_ESCALATE=1; otherwise the single AGENT_BACKEND is used as-is.
+        local _saved_backend="${AGENT_BACKEND:-openclaw}"
+        if [ "${AGENT_ESCALATE:-0}" = "1" ]; then
+            if [ "${attempt}" -gt "${AGENT_ESCALATE_AFTER:-2}" ]; then
+                AGENT_BACKEND="${AGENT_ESCALATED:-copilot}"
+                log_warn "Hybrid escalation: attempt ${attempt} > ${AGENT_ESCALATE_AFTER:-2} → switching to '${AGENT_BACKEND}' (harder case)"
+            else
+                AGENT_BACKEND="${AGENT_PRIMARY:-openclaw}"
+                log_info "Hybrid: attempt ${attempt} → primary backend '${AGENT_BACKEND}'"
+            fi
+        fi
+
+        # MULTI_AGENT=1 → two-agent flow (diagnoser → fixer); else single agent.
+        if [ "${MULTI_AGENT:-0}" = "1" ]; then
+            run_multiagent_fix "${fix_prompt}" "${agent_log}" "${fix_session_id}" "${attempt}" || true
+        else
+            run_agent_fix "${fix_prompt}" "${agent_log}" "${fix_session_id}" || true
+        fi
+
+        # 6·patch. Capture the agent's edits as a unified diff (bug-fix patch), so the
+        # lesson stores WHAT CHANGED — not just a text summary. Sets LAST_PATCH_FILE.
+        capture_fix_patch "${attempt}" "${_patch_marker}"
+        # Restore the configured backend for non-agent code paths / next iteration logic.
+        AGENT_BACKEND="${_saved_backend}"
+
 
         # Capture the agent's FULL structured diagnosis (analysis + fix) as JSON so every
         # lesson we write below carries the agent's ROOT_CAUSE / COMPONENT / EVIDENCE /
@@ -509,6 +540,93 @@ PROMPT
 }
 
 # ═══════════════════════════════════════════════════════════════════
+# run_agent_fix — dispatch the fix call to the configured agent backend.
+#   Selected via AGENT_BACKEND (config.env / env): openclaw (default) | copilot
+# ═══════════════════════════════════════════════════════════════════
+run_agent_fix() {
+    local backend
+    backend=$(printf '%s' "${AGENT_BACKEND:-openclaw}" | tr '[:upper:]' '[:lower:]')
+    case "${backend}" in
+        copilot)
+            run_copilot_fix "$@"
+            ;;
+        openclaw|"")
+            run_openclaw_fix "$@"
+            ;;
+        *)
+            log_warn "Unknown AGENT_BACKEND='${backend}', falling back to openclaw"
+            run_openclaw_fix "$@"
+            ;;
+    esac
+}
+
+# ═══════════════════════════════════════════════════════════════════
+# run_multiagent_fix — two-agent bug-analysis flow (P2), backend-agnostic.
+#
+#   Agent 1 (DIAGNOSER): analysis ONLY. Reads logs/code, does NOT edit anything.
+#                        Emits COMPONENT / ROOT_CAUSE / FIX_PLAN / SMOKE_TEST.
+#   Agent 2 (FIXER):     receives the diagnosis and actually applies the fix.
+#
+#   Both agents use the configured backend (openclaw/copilot) via run_agent_fix,
+#   so this works for either. Enabled with MULTI_AGENT=1. The fixer's output goes
+#   to the normal ${agent_log} so all downstream extraction/patch capture works
+#   unchanged.
+# ═══════════════════════════════════════════════════════════════════
+run_multiagent_fix() {
+    local base_prompt="$1"
+    local log_file="$2"
+    local session_id="$3"
+    local attempt="${4:-1}"
+
+    local diag_log="${fix_log_dir}/diagnose_${attempt}.log"
+
+    local diagnose_prompt
+    diagnose_prompt="ROLE: You are the DIAGNOSER in a two-agent repair team.
+Analyze the failure below. DO NOT edit, install, or change ANYTHING — analysis only.
+Output a concise structured diagnosis with these labeled lines:
+COMPONENT: <auto_round|transformers|torch|model_code|lm_eval|infrastructure>
+ROOT_CAUSE: <1-3 sentences, traced bottom-up from the traceback>
+FIX_PLAN: <numbered, concrete steps the fixer should apply>
+SMOKE_TEST: <a single shell/python command that will confirm the fix>
+
+--- FAILURE CONTEXT ---
+${base_prompt}"
+
+    log_info "  [multi-agent] Agent 1/2: DIAGNOSER (session=${session_id}_diag)"
+    run_agent_fix "${diagnose_prompt}" "${diag_log}" "${session_id}_diag" || true
+
+    # Extract the diagnosis so we can hand it to the fixer.
+    local diag_component diag_root diag_plan diag_smoke
+    diag_component=$(extract_agent_field "${diag_log}" "COMPONENT")
+    diag_root=$(extract_agent_field "${diag_log}" "ROOT_CAUSE")
+    diag_plan=$(extract_agent_field "${diag_log}" "FIX_PLAN")
+    diag_smoke=$(extract_agent_field "${diag_log}" "SMOKE_TEST")
+
+    local fixer_prompt
+    fixer_prompt="ROLE: You are the FIXER in a two-agent repair team.
+A diagnoser already analyzed this failure. Apply the fix by EDITING files / installing
+as needed, then verify with the smoke test. Prefer the LOWEST fix tier. Preserve CUDA.
+
+--- DIAGNOSER'S ANALYSIS ---
+COMPONENT: ${diag_component:-unknown}
+ROOT_CAUSE: ${diag_root:-see full analysis below}
+FIX_PLAN: ${diag_plan:-derive from root cause}
+SMOKE_TEST: ${diag_smoke:-add your own}
+
+(Full diagnoser log: ${diag_log})
+
+--- ORIGINAL FAILURE CONTEXT ---
+${base_prompt}
+
+After applying the fix, emit the same structured fields (COMPONENT / ERROR_CLASS /
+ROOT_CAUSE / FIX_TIER / FIX_PLAN / SMOKE_TEST) so the pipeline can record the lesson."
+
+    log_info "  [multi-agent] Agent 2/2: FIXER (session=${session_id})"
+    run_agent_fix "${fixer_prompt}" "${log_file}" "${session_id}" || true
+    return 0
+}
+
+# ═══════════════════════════════════════════════════════════════════
 # run_openclaw_fix — call OpenClaw agent with the fix prompt
 # ═══════════════════════════════════════════════════════════════════
 run_openclaw_fix() {
@@ -570,6 +688,115 @@ run_openclaw_fix() {
         log_info "  Agent session complete: ${msg_count} messages, ${tool_count} tool calls"
     fi
 
+    return 0
+}
+
+# ═══════════════════════════════════════════════════════════════════
+# run_copilot_fix — call the GitHub Copilot CLI agent with the fix prompt
+#
+#   Drop-in replacement for run_openclaw_fix. Uses the agentic Copilot CLI
+#   (`copilot -p "<prompt>"`) which can read files, edit code, run shell
+#   commands and install packages autonomously.
+#
+#   Session memory: Copilot CLI keeps its own session store. To mirror
+#   OpenClaw's single-session reuse (so the agent remembers what it already
+#   tried across attempts), we pass `--continue` on every attempt after the
+#   first for a given logical session id (tracked via a marker file).
+#
+#   Config (config.env / env):
+#     COPILOT_BIN           binary name (default: copilot)
+#     COPILOT_GITHUB_TOKEN  GitHub token for headless auth (fine-grained PAT with
+#                           "Copilot Requests"; or GH_TOKEN / GITHUB_TOKEN). If
+#                           empty, falls back to an interactive `copilot login`.
+#     COPILOT_MODEL         optional --model override (Copilot backend model)
+#     COPILOT_TOOL_ARGS     tool-permission args (default: --allow-all-tools)
+#     AGENT_TIMEOUT         per-call timeout seconds (default: 600)
+# ═══════════════════════════════════════════════════════════════════
+run_copilot_fix() {
+    local prompt="$1"
+    local log_file="$2"
+    local session_id_arg="${3:-}"
+
+    local copilot_bin="${COPILOT_BIN:-copilot}"
+    if ! command -v "${copilot_bin}" >/dev/null 2>&1; then
+        log_warn "${copilot_bin} not found, skipping agent fix (install @github/copilot)"
+        echo "copilot CLI not available" > "${log_file}"
+        return 1
+    fi
+
+    # Headless auth: Copilot CLI reads COPILOT_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN
+    # from its environment. config.env is plain-sourced (not auto-exported), so we
+    # export the token here to make it visible to the copilot child process.
+    # If none is set, the CLI falls back to a prior interactive `copilot login`.
+    if [[ -n "${COPILOT_GITHUB_TOKEN:-}" ]]; then
+        export COPILOT_GITHUB_TOKEN
+    elif [[ -n "${GH_TOKEN:-}" ]]; then
+        export GH_TOKEN
+    elif [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        export GITHUB_TOKEN
+    else
+        log_info "  No COPILOT_GITHUB_TOKEN/GH_TOKEN set; relying on prior 'copilot login'"
+    fi
+
+    local timeout="${AGENT_TIMEOUT:-600}"
+    local session_id="${session_id_arg:-fix_${phase_name:-unknown}_$$_$(date +%s)}"
+
+    # Resume the same logical session on attempts after the first so the agent
+    # retains memory of failed fixes (parity with OpenClaw's single session).
+    local state_dir="${COPILOT_STATE_DIR:-${RUN_OUTPUT_DIR}/logs/copilot_state}"
+    mkdir -p "${state_dir}"
+    local marker="${state_dir}/${session_id}.started"
+    local resume_args=()
+    [[ -f "${marker}" ]] && resume_args+=(--continue)
+
+    # Optional model override. NOTE: Copilot CLI uses its own model backend and
+    # generally cannot be pointed at an arbitrary provider (e.g. minimax).
+    local model_args=()
+    [[ -n "${COPILOT_MODEL:-}" ]] && model_args+=(--model "${COPILOT_MODEL}")
+
+    # Tool permissions — allow autonomous execution by default.
+    # shellcheck disable=SC2206
+    local tool_args=(${COPILOT_TOOL_ARGS:---allow-all-tools})
+
+    log_info "Calling Copilot CLI agent (session=${session_id}, resume=${resume_args[*]:-no}, timeout=${timeout}s)..."
+
+    # Background progress reporter — prints elapsed time + log size every 30s
+    local _progress_pid=""
+    (
+        local _start=$SECONDS
+        while true; do
+            sleep 30
+            local elapsed=$(( SECONDS - _start ))
+            local lines=0
+            [[ -f "${log_file}" ]] && lines=$(wc -l < "${log_file}" 2>/dev/null || echo 0)
+            log_info "  [agent running ${elapsed}s] log: ${lines} lines"
+        done
+    ) &
+    _progress_pid=$!
+
+    NO_COLOR=1 timeout "${timeout}" "${copilot_bin}" \
+        "${resume_args[@]}" \
+        "${model_args[@]}" \
+        "${tool_args[@]}" \
+        -p "${prompt}" \
+        2>&1 | tee "${log_file}" || {
+        local rc=$?
+        if [ $rc -eq 124 ]; then
+            echo "[TIMEOUT] Agent exceeded ${timeout}s" >> "${log_file}"
+            log_warn "Agent timed out after ${timeout}s"
+        fi
+    }
+
+    # Stop progress reporter
+    if [[ -n "${_progress_pid}" ]]; then
+        kill "${_progress_pid}" 2>/dev/null || true
+        wait "${_progress_pid}" 2>/dev/null || true
+    fi
+
+    # Mark the session so subsequent attempts resume it.
+    touch "${marker}"
+
+    log_info "  Agent turn complete (log: $(wc -l < "${log_file}" 2>/dev/null || echo 0) lines)"
     return 0
 }
 
@@ -672,6 +899,91 @@ run_smoke_test() {
 }
 
 # ═══════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+# capture_fix_patch — record WHAT the agent changed as a unified diff.
+#
+#   Two complementary sources (both backends: openclaw / copilot):
+#     1. git repos in PATCH_CAPTURE_DIRS → `git diff` (tracked-file edits)
+#     2. any file modified after the per-attempt marker → snapshot diff via
+#        a stored baseline copy is too heavy, so we record the file list plus,
+#        for small text files, their current content as an "added" hunk.
+#
+#   Config:
+#     PATCH_CAPTURE_DIRS  colon-separated dirs to watch. Default: auto-round
+#                         source (if present), the phase scripts dir, and the
+#                         run output dir. HF cache edits are captured when the
+#                         cache dir is included here.
+#     PATCH_MAX_BYTES     cap on stored patch size (default 200000).
+#
+#   Output: ${fix_log_dir}/patch_${attempt}.diff ; sets global LAST_PATCH_FILE.
+# ═══════════════════════════════════════════════════════════════════
+LAST_PATCH_FILE=""
+capture_fix_patch() {
+    local attempt="$1"
+    local marker="$2"
+    LAST_PATCH_FILE=""
+
+    local out="${fix_log_dir}/patch_${attempt}.diff"
+    local max_bytes="${PATCH_MAX_BYTES:-200000}"
+
+    # Default watch set: auto-round source (common edit target), phase scripts, run dir.
+    local default_dirs=()
+    [[ -n "${AUTO_ROUND_SRC_DIR:-}" && -d "${AUTO_ROUND_SRC_DIR}" ]] && default_dirs+=("${AUTO_ROUND_SRC_DIR}")
+    [[ -d "${_AFL_DIR:-}" ]] && default_dirs+=("${_AFL_DIR}")
+    [[ -n "${RUN_OUTPUT_DIR:-}" && -d "${RUN_OUTPUT_DIR}" ]] && default_dirs+=("${RUN_OUTPUT_DIR}")
+    local dirs_spec="${PATCH_CAPTURE_DIRS:-$(IFS=:; echo "${default_dirs[*]}")}"
+
+    {
+        echo "# Fix patch — attempt ${attempt}"
+        echo "# Phase: ${phase_name:-unknown}  Model: ${MODEL_ID:-unknown}  Backend: ${AGENT_BACKEND:-openclaw}"
+        echo "# Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo
+    } > "${out}"
+
+    local IFS=':'
+    local d had_content=0
+    for d in ${dirs_spec}; do
+        [[ -z "${d}" || ! -d "${d}" ]] && continue
+
+        # 1. git-tracked edits
+        if git -C "${d}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            local gdiff
+            gdiff=$(git -C "${d}" diff 2>/dev/null || true)
+            if [[ -n "${gdiff}" ]]; then
+                { echo "### git diff: ${d}"; echo '```diff'; echo "${gdiff}"; echo '```'; echo; } >> "${out}"
+                had_content=1
+            fi
+        fi
+
+        # 2. non-git edits: files modified after the marker (skip logs/binaries)
+        local changed
+        changed=$(find "${d}" -type f -newer "${marker}" \
+            ! -path '*/.git/*' ! -path '*/logs/*' ! -name '*.log' \
+            ! -name '*.jsonl' ! -name '.patch_marker_*' 2>/dev/null | head -50 || true)
+        if [[ -n "${changed}" ]]; then
+            { echo "### files modified after agent run in ${d}:"; echo "${changed}" | sed 's/^/#   /'; echo; } >> "${out}"
+            had_content=1
+        fi
+    done
+
+    if [[ "${had_content}" -eq 0 ]]; then
+        echo "# (no file changes detected — fix may be env/config only)" >> "${out}"
+    fi
+
+    # Enforce size cap
+    if [[ -f "${out}" ]]; then
+        local sz
+        sz=$(wc -c < "${out}" 2>/dev/null || echo 0)
+        if [[ "${sz}" -gt "${max_bytes}" ]]; then
+            head -c "${max_bytes}" "${out}" > "${out}.trunc" && mv "${out}.trunc" "${out}"
+            echo -e "\n# [truncated at ${max_bytes} bytes]" >> "${out}"
+        fi
+        LAST_PATCH_FILE="${out}"
+        log_info "  Captured fix patch → ${out}"
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════
 # save_lesson — persist a lesson to the JSONL file
 # ═══════════════════════════════════════════════════════════════════
 save_lesson() {
@@ -686,7 +998,7 @@ save_lesson() {
     mkdir -p "${LESSONS_DIR}"
 
     # Pass error_context via env var (not stdin, which conflicts with heredoc)
-    LESSON_ERROR_CONTEXT="${error_context}" LESSON_TAXONOMY_DIR="${ERROR_ANALYSIS_DIR}" LESSON_AGENT_ANALYSIS="${agent_analysis}" python3 - "${phase}" "${status}" "${solution_note}" "${MODEL_ID:-unknown}" "${SCHEME:-W4A16}" "${METHOD:-RTN}" "${lessons_file}" <<'PYEOF'
+    LESSON_ERROR_CONTEXT="${error_context}" LESSON_TAXONOMY_DIR="${ERROR_ANALYSIS_DIR}" LESSON_AGENT_ANALYSIS="${agent_analysis}" LESSON_PATCH_FILE="${LAST_PATCH_FILE:-}" python3 - "${phase}" "${status}" "${solution_note}" "${MODEL_ID:-unknown}" "${SCHEME:-W4A16}" "${METHOD:-RTN}" "${lessons_file}" <<'PYEOF'
 import json
 import sys
 import os
@@ -795,6 +1107,20 @@ keywords = list(dict.fromkeys(words))[:5]  # unique, ordered
 traceback_lines = (_strip_noise(error_context) or error_context).strip().splitlines()[-50:]
 error_traceback = "\n".join(traceback_lines)
 
+# Bug-fix patch (unified diff of what the agent changed), captured by capture_fix_patch().
+patch_file = os.environ.get("LESSON_PATCH_FILE", "").strip()
+patch_text = ""
+patch_has_changes = False
+if patch_file and os.path.isfile(patch_file):
+    try:
+        patch_text = open(patch_file, encoding="utf-8", errors="replace").read()
+    except OSError:
+        patch_text = ""
+    # A patch is "real" if it contains an actual diff/file-change section.
+    patch_has_changes = ("```diff" in patch_text) or ("files modified after" in patch_text)
+# Keep the lesson compact: store a bounded excerpt + a path to the full patch.
+patch_excerpt = patch_text[:6000]
+
 lesson = {
     "id": f"lesson-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}",
     "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -812,6 +1138,9 @@ lesson = {
     "scheme": scheme,
     "method": method,
     "solution": solution_note,
+    "patch": patch_excerpt,
+    "patch_file": patch_file,
+    "patch_has_changes": patch_has_changes,
     "status": status,
     "verified_count": 1,
     "source_tasks": [f"{model_id}_{scheme}_{method}"],
