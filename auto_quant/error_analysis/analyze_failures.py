@@ -525,6 +525,90 @@ def run_openclaw_analysis(prompt: str, session_id: str, timeout: int = 120) -> t
     return None, session_file
 
 
+def run_copilot_analysis(prompt: str, session_id: str, timeout: int = 120) -> tuple[dict | None, Path | None]:
+    """Run the GitHub Copilot CLI to analyze the error (drop-in for run_openclaw_analysis).
+
+    Unlike OpenClaw (which persists a session JSONL we parse), the Copilot CLI prints
+    the assistant's final answer to stdout. We capture stdout to a log file and extract
+    the diagnosis JSON object from it.
+
+    Auth: reads COPILOT_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN from the environment,
+    or a prior interactive `copilot login`.
+
+    Returns (parsed_diagnosis, log_file_path) or (None, log_file_path/None).
+    """
+    copilot_bin = shutil.which(os.environ.get("COPILOT_BIN", "copilot"))
+    if not copilot_bin:
+        print("  [WARN] copilot CLI not found, using quick classification only")
+        return None, None
+
+    env = os.environ.copy()
+    # Ensure the token (if only present as a config var) is visible to the child.
+    for _tok in ("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"):
+        if env.get(_tok):
+            env[_tok] = env[_tok]
+            break
+
+    agent_log_dir = Path(os.environ.get("RUN_OUTPUT_DIR", "/tmp")) / "logs"
+    agent_log_dir.mkdir(parents=True, exist_ok=True)
+    agent_log_path = agent_log_dir / f"error_analysis_agent_{session_id}.log"
+
+    tool_args = os.environ.get("COPILOT_TOOL_ARGS", "--allow-all-tools").split()
+    model_args = []
+    if os.environ.get("COPILOT_MODEL"):
+        model_args = ["--model", os.environ["COPILOT_MODEL"]]
+
+    cmd = [copilot_bin, *tool_args, *model_args, "-p", prompt]
+    env["NO_COLOR"] = "1"
+
+    try:
+        with open(agent_log_path, "w") as log_fh:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env=env,
+            )
+            for line in proc.stdout:
+                sys.stdout.write(f"    │ {line}")
+                sys.stdout.flush()
+                log_fh.write(line)
+            proc.wait(timeout=timeout + 30)
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        if 'proc' in locals():
+            proc.kill()
+        return None, agent_log_path if agent_log_path.exists() else None
+
+    # Extract the diagnosis JSON from the captured stdout.
+    try:
+        output_text = agent_log_path.read_text()
+    except OSError:
+        return None, agent_log_path
+
+    diagnosis = _extract_json_object(output_text)
+    if diagnosis:
+        return diagnosis, agent_log_path
+
+    return None, agent_log_path
+
+
+def run_agent_analysis(prompt: str, session_id: str, timeout: int = 120,
+                       backend: str | None = None) -> tuple[dict | None, Path | None]:
+    """Dispatch failure analysis to the configured agent backend.
+
+    Selected via AGENT_BACKEND (env / config.env): openclaw (default) | copilot.
+    A `backend` override lets callers force a specific backend (used by the
+    hybrid escalation path).
+    """
+    backend = (backend or os.environ.get("AGENT_BACKEND", "openclaw")).strip().lower()
+    if backend == "copilot":
+        return run_copilot_analysis(prompt, session_id, timeout=timeout)
+    if backend not in ("openclaw", ""):
+        print(f"  [WARN] Unknown AGENT_BACKEND='{backend}', falling back to openclaw")
+    return run_openclaw_analysis(prompt, session_id, timeout=timeout)
+
+
 def _summarize_agent_thinking(
     run_info: dict, error_context: str, thinking: str, timeout: int = 60
 ) -> dict | None:
@@ -581,8 +665,8 @@ OUTPUT THE JSON NOW. No tools. No research. Just format your existing analysis.
 """
 
     session_id = f"summary_{run_info['org']}_{int(time.time())}"
-    # Use run_openclaw_analysis but with shorter timeout
-    result, _ = run_openclaw_analysis(summary_prompt, session_id, timeout=timeout)
+    # Use the configured agent backend but with a shorter timeout
+    result, _ = run_agent_analysis(summary_prompt, session_id, timeout=timeout)
     # If result has _agent_thinking, it means it timed out again — give up
     if result and "_agent_thinking" not in result:
         return result
@@ -1021,14 +1105,37 @@ def analyze_single_run(run_info: dict, use_agent: bool = True, timeout: int = 12
     quick_result = quick_classify(raw_error_log)
     print(f"    Quick: {quick_result['category']} (retryable={quick_result['retryable']})")
 
-    # Deep analysis with openclaw agent
+    # Deep analysis with the configured agent backend
     diagnosis = None
     session_file = None
     if use_agent:
         session_id = f"diag_{run_info['org']}_{int(time.time())}"
         prompt = build_analysis_prompt(run_info, error_context, quick_result)
-        print(f"    Agent analyzing...", end=" ", flush=True)
-        diagnosis, session_file = run_openclaw_analysis(prompt, session_id, timeout=timeout)
+
+        # Hybrid escalation: try the cheap PRIMARY backend first; if it fails to
+        # produce a usable diagnosis, escalate to the stronger ESCALATED backend.
+        escalate = os.environ.get("AGENT_ESCALATE", "0") == "1"
+        primary = os.environ.get("AGENT_PRIMARY", os.environ.get("AGENT_BACKEND", "openclaw"))
+        escalated = os.environ.get("AGENT_ESCALATED", "copilot")
+
+        first_backend = primary if escalate else None
+        print(f"    Agent analyzing ({first_backend or os.environ.get('AGENT_BACKEND', 'openclaw')})...",
+              end=" ", flush=True)
+        diagnosis, session_file = run_agent_analysis(prompt, session_id, timeout=timeout,
+                                                     backend=first_backend)
+
+        def _usable(d):
+            return bool(d) and "_agent_thinking" not in d and (
+                d.get("root_cause") or d.get("suggested_fix") or d.get("category"))
+
+        if escalate and not _usable(diagnosis) and escalated != primary:
+            print(f"→ [primary '{primary}' inconclusive, escalating to '{escalated}'...]",
+                  end=" ", flush=True)
+            esc_session = f"diag_{run_info['org']}_{int(time.time())}_esc"
+            esc_diag, esc_file = run_agent_analysis(prompt, esc_session, timeout=timeout,
+                                                    backend=escalated)
+            if _usable(esc_diag):
+                diagnosis, session_file = esc_diag, esc_file
 
         if diagnosis and "_agent_thinking" in diagnosis:
             # Agent timed out but has partial thinking — ask openclaw to summarize

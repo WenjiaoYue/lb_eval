@@ -352,6 +352,31 @@ else
     log_error "Pipeline failed at: ${FAILED_STEPS[*]} (${PIPELINE_DURATION}s)"
 fi
 
+# ═══ Record working recipe (positive KB) on success ═══
+# Captures which scheme/method/params produced a working quantized model + its
+# accuracy, so future runs can look up a known-good recipe for this model.
+if [[ "$PIPELINE_STATUS" == "Finished" ]]; then
+    RECIPE_SCRIPT="${SCRIPT_DIR}/recipes/record_recipe.py"
+    if [[ -f "${RECIPE_SCRIPT}" ]]; then
+        python3 "${RECIPE_SCRIPT}" record \
+            --model "${MODEL_ID}" \
+            --scheme "${SCHEME}" \
+            --method "${METHOD}" \
+            --iters "${ITERS:-0}" \
+            --export-format "${EXPORT_FORMAT}" \
+            --device "${DEVICE}" \
+            --num-gpus "${NUM_GPUS:-1}" \
+            --layer-config "${LAYER_CONFIG:-}" \
+            --ignore-layers "${IGNORE_LAYERS:-}" \
+            --auto-round-ref "${AUTO_ROUND_REF:-}" \
+            --transformers-ref "${TRANSFORMERS_REF:-}" \
+            --accuracy-json "${RUN_OUTPUT_DIR}/accuracy.json" \
+            --status "finished" \
+            --source-task "${MODEL_ID}_${SCHEME}_${METHOD}" \
+            2>&1 | tee "${LOG_DIR}/recipe.log" || log_warn "Recipe recording failed (non-fatal)"
+    fi
+fi
+
 # ═══ Collect OpenClaw session logs ═══
 # Copy .jsonl session files from the openclaw sessions directory into RUN_OUTPUT_DIR,
 # then format them to human-readable .md (matching old pipeline behavior)
