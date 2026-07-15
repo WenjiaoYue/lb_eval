@@ -25,7 +25,7 @@
     "gpu_nums": 1,
     "method": "MODEL_FREE",
     "script": "auto_quant",
-    "status": "Failed",
+    "status": "Finished",
     "submitted_time": "2026-07-09T14:52:54Z",
     "submitted_by": "lvkaokao",
     "submitted_orgs": [

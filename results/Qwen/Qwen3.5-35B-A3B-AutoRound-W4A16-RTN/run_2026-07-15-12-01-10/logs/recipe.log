@@ -1,0 +1,2 @@
+[recipe] Recorded: Qwen/Qwen3.5-35B-A3B | W4A16/MODEL_FREE (iters=0, mean_acc=0.823574)
+[recipe] Store: /azure/test/tmp/lb_eval/auto_quant/recipes/recipes.jsonl

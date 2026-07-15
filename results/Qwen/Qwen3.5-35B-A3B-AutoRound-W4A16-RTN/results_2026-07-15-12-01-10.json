@@ -1,0 +1,280 @@
+{
+  "status": "Finished",
+  "pipeline": "auto_quant",
+  "model_id": "Qwen/Qwen3.5-35B-A3B",
+  "artifact_name": "Qwen3.5-35B-A3B-AutoRound-W4A16-RTN",
+  "request_filename": "Qwen3.5-35B-A3B_quant_request_False_W4A16_4bit_int4_MODEL_FREE.json",
+  "generated_at": "2026-07-15T12:01:10Z",
+  "source_runtime_dir": "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree",
+  "source_model_dir": "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model",
+  "run_dir": "results/Qwen/Qwen3.5-35B-A3B-AutoRound-W4A16-RTN/run_2026-07-15-12-01-10",
+  "quant_summary": {
+    "status": "success",
+    "model_id": "Qwen/Qwen3.5-35B-A3B",
+    "architecture": "Qwen3_5MoeForConditionalGeneration",
+    "model_type": "qwen3_5_moe",
+    "is_moe": true,
+    "scheme": "W4A16",
+    "method": "RTN",
+    "ar_scheme": "W4A16",
+    "iters": 0,
+    "export_format": "auto_round",
+    "ignore_layers": "lm_head",
+    "model_free": true,
+    "layer_config": null,
+    "duration_seconds": 143.6,
+    "output_dir": "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model",
+    "device": "0",
+    "device_map": "0",
+    "num_gpus": "1",
+    "output_files": [
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/.gitattributes",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/LICENSE",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/README.md",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/chat_template.jinja",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/config.json",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/generation_config.json",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/merges.txt",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00001-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00002-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00003-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00004-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00005-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00006-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00007-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00008-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00009-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00010-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00011-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00012-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00013-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model-00014-of-00014.safetensors",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/model.safetensors.index.json",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/preprocessor_config.json",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/quantization_config.json",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/tokenizer.json",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/tokenizer_config.json",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/video_preprocessor_config.json",
+      "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model/vocab.json"
+    ],
+    "original_size_mb": null,
+    "quantized_size_mb": 19923.9,
+    "compression_ratio": null,
+    "errors": [],
+    "solutions": []
+  },
+  "accuracy": {
+    "status": "success",
+    "model_id": "quantized_model",
+    "model_path": "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/quantized_model",
+    "eval_framework": "lm_eval (hf)",
+    "num_gpus": "1",
+    "eval_num_gpus": "1",
+    "tasks": {
+      "piqa": {
+        "accuracy": 0.816104
+      },
+      "mmlu_abstract_algebra": {
+        "accuracy": 0.63
+      },
+      "mmlu_anatomy": {
+        "accuracy": 0.82963
+      },
+      "mmlu_astronomy": {
+        "accuracy": 0.953947
+      },
+      "mmlu_college_biology": {
+        "accuracy": 0.930556
+      },
+      "mmlu_college_chemistry": {
+        "accuracy": 0.59
+      },
+      "mmlu_college_computer_science": {
+        "accuracy": 0.69
+      },
+      "mmlu_college_mathematics": {
+        "accuracy": 0.69
+      },
+      "mmlu_college_physics": {
+        "accuracy": 0.686275
+      },
+      "mmlu_computer_security": {
+        "accuracy": 0.84
+      },
+      "mmlu_conceptual_physics": {
+        "accuracy": 0.93617
+      },
+      "mmlu_electrical_engineering": {
+        "accuracy": 0.827586
+      },
+      "mmlu_elementary_mathematics": {
+        "accuracy": 0.798942
+      },
+      "mmlu_high_school_biology": {
+        "accuracy": 0.948387
+      },
+      "mmlu_high_school_chemistry": {
+        "accuracy": 0.773399
+      },
+      "mmlu_high_school_computer_science": {
+        "accuracy": 0.89
+      },
+      "mmlu_high_school_mathematics": {
+        "accuracy": 0.574074
+      },
+      "mmlu_high_school_physics": {
+        "accuracy": 0.768212
+      },
+      "mmlu_high_school_statistics": {
+        "accuracy": 0.805556
+      },
+      "mmlu_machine_learning": {
+        "accuracy": 0.767857
+      },
+      "mmlu_business_ethics": {
+        "accuracy": 0.85
+      },
+      "mmlu_clinical_knowledge": {
+        "accuracy": 0.890566
+      },
+      "mmlu_college_medicine": {
+        "accuracy": 0.855491
+      },
+      "mmlu_global_facts": {
+        "accuracy": 0.52
+      },
+      "mmlu_human_aging": {
+        "accuracy": 0.820628
+      },
+      "mmlu_management": {
+        "accuracy": 0.932039
+      },
+      "mmlu_marketing": {
+        "accuracy": 0.940171
+      },
+      "mmlu_medical_genetics": {
+        "accuracy": 0.95
+      },
+      "mmlu_miscellaneous": {
+        "accuracy": 0.934866
+      },
+      "mmlu_nutrition": {
+        "accuracy": 0.872549
+      },
+      "mmlu_professional_accounting": {
+        "accuracy": 0.734043
+      },
+      "mmlu_professional_medicine": {
+        "accuracy": 0.922794
+      },
+      "mmlu_virology": {
+        "accuracy": 0.572289
+      },
+      "mmlu_econometrics": {
+        "accuracy": 0.763158
+      },
+      "mmlu_high_school_geography": {
+        "accuracy": 0.929293
+      },
+      "mmlu_high_school_government_and_politics": {
+        "accuracy": 0.974093
+      },
+      "mmlu_high_school_macroeconomics": {
+        "accuracy": 0.884615
+      },
+      "mmlu_high_school_microeconomics": {
+        "accuracy": 0.945378
+      },
+      "mmlu_high_school_psychology": {
+        "accuracy": 0.955963
+      },
+      "mmlu_human_sexuality": {
+        "accuracy": 0.900763
+      },
+      "mmlu_professional_psychology": {
+        "accuracy": 0.885621
+      },
+      "mmlu_public_relations": {
+        "accuracy": 0.718182
+      },
+      "mmlu_security_studies": {
+        "accuracy": 0.836735
+      },
+      "mmlu_sociology": {
+        "accuracy": 0.910448
+      },
+      "mmlu_us_foreign_policy": {
+        "accuracy": 0.92
+      },
+      "mmlu_formal_logic": {
+        "accuracy": 0.68254
+      },
+      "mmlu_high_school_european_history": {
+        "accuracy": 0.884848
+      },
+      "mmlu_high_school_us_history": {
+        "accuracy": 0.901961
+      },
+      "mmlu_high_school_world_history": {
+        "accuracy": 0.932489
+      },
+      "mmlu_international_law": {
+        "accuracy": 0.917355
+      },
+      "mmlu_jurisprudence": {
+        "accuracy": 0.861111
+      },
+      "mmlu_logical_fallacies": {
+        "accuracy": 0.877301
+      },
+      "mmlu_moral_disputes": {
+        "accuracy": 0.820809
+      },
+      "mmlu_moral_scenarios": {
+        "accuracy": 0.593296
+      },
+      "mmlu_philosophy": {
+        "accuracy": 0.861736
+      },
+      "mmlu_prehistory": {
+        "accuracy": 0.885802
+      },
+      "mmlu_professional_law": {
+        "accuracy": 0.677314
+      },
+      "mmlu_world_religions": {
+        "accuracy": 0.900585
+      },
+      "hellaswag": {
+        "accuracy": 0.615415
+      },
+      "mmlu_stem": {
+        "accuracy": 0.798605
+      },
+      "mmlu_other": {
+        "accuracy": 0.858384
+      },
+      "mmlu_social_sciences": {
+        "accuracy": 0.899903
+      },
+      "mmlu_humanities": {
+        "accuracy": 0.753879
+      },
+      "mmlu": {
+        "accuracy": 0.819043
+      }
+    },
+    "lm_eval_output_dir": "/azure/test/tmp/lb_eval/auto_quant/output/runs/Qwen3.5-35B-A3B-AutoRound-W4A16-ModelFree/lm_eval_results",
+    "errors": []
+  },
+  "copied_files": [
+    "results/Qwen/Qwen3.5-35B-A3B-AutoRound-W4A16-RTN/run_2026-07-15-12-01-10/quant_summary.json",
+    "results/Qwen/Qwen3.5-35B-A3B-AutoRound-W4A16-RTN/run_2026-07-15-12-01-10/accuracy.json",
+    "results/Qwen/Qwen3.5-35B-A3B-AutoRound-W4A16-RTN/run_2026-07-15-12-01-10/request.json",
+    "results/Qwen/Qwen3.5-35B-A3B-AutoRound-W4A16-RTN/run_2026-07-15-12-01-10/run_report.md",
+    "results/Qwen/Qwen3.5-35B-A3B-AutoRound-W4A16-RTN/run_2026-07-15-12-01-10/lm_eval_results",
+    "results/Qwen/Qwen3.5-35B-A3B-AutoRound-W4A16-RTN/run_2026-07-15-12-01-10/logs"
+  ],
+  "quant_num_gpus": "1",
+  "eval_num_gpus": "1"
+}

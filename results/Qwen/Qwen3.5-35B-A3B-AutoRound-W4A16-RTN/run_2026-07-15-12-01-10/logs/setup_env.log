@@ -1,0 +1,33 @@
+=== Phase 1: Environment Setup ===
+  AUTO_ROUND_REF=latest
+  TRANSFORMERS_REF=auto
+  EXPORT_FORMAT=auto_round
+  EVAL_BACKEND=hf
+[setup_env] Installing: auto-round
+Using Python 3.12.13 environment at: /root/.venv
+Checked 1 package in 139ms
+Using Python 3.12.13 environment at: /root/.venv
+Checked 1 package in 24ms
+Using Python 3.12.13 environment at: /root/.venv
+Checked 6 packages in 8ms
+[setup_env] Checking torch/CUDA driver compatibility...
+[setup_env] torch=2.11.0+cu130, CUDA available — OK
+[setup_env] Running pre-flight dependency check for Qwen/Qwen3.5-35B-A3B...
+10:28:30 [preflight] Pre-flight check for: Qwen/Qwen3.5-35B-A3B
+10:28:30 [preflight] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-35B-A3B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+10:28:30 [preflight] Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+10:28:30 [preflight] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen3.5-35B-A3B/59d61f3ce65a6d9863b86d2e96597125219dc754/config.json "HTTP/1.1 200 OK"
+10:28:30 [preflight]   model_type: qwen3_5_moe
+10:28:30 [preflight]   auto_map: no
+10:28:30 [preflight]   transformers_version: 4.57.0.dev0
+10:28:30 [preflight] HTTP Request: HEAD https://huggingface.co/Qwen/Qwen3.5-35B-A3B/resolve/main/requirements.txt "HTTP/1.1 404 Not Found"
+10:28:30 [preflight]   ✓ All dependencies satisfied
+
+[setup_env] Verification:
+  torch=2.11.0+cu130, cuda=True
+  auto_round=0.14.1
+  transformers=5.13.0
+  lm_eval=0.4.12
+
+=== Phase 1: DONE ===
